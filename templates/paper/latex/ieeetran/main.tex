@@ -1,0 +1,38 @@
+\documentclass[journal]{IEEEtran}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{cite}
+\usepackage[hidelinks]{hyperref}
+\graphicspath{{figures/}}
+
+% IEEEtran stops on an empty bibliography ("missing \item") until the first \cite exists.
+% Inside the bibliography only, report that as a warning so the skeleton compiles.
+\makeatletter
+\let\rtpOriginalThebibliography\thebibliography
+\renewcommand\thebibliography[1]{\def\@noitemerr{\@latex@warning{Empty bibliography}}\rtpOriginalThebibliography{#1}}
+\makeatother
+
+\title{[MISSING: title]}
+\author{[MISSING: author list and affiliations]}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\input{sections/abstract}
+\end{abstract}
+
+\begin{IEEEkeywords}
+[MISSING: keywords]
+\end{IEEEkeywords}
+
+\input{sections/introduction}
+\input{sections/methods}
+\input{sections/results}
+\input{sections/conclusion}
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}

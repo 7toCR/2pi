@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research2Paper"
+  short_description: "Evidence-bound SCI paper drafting, revision and review replies"
+  default_prompt: "Use $research2paper to turn my research material into the requested paper section or full draft: English manuscript text, Chinese notes, every missing fact marked [MISSING: ...], and run the draft checker before delivery."

@@ -1,0 +1,12 @@
+{
+  "research2paper": {
+    "source": "github.com/7toCR/research2paper (skills/research2paper, agent/templates)",
+    "digest": "66e1f21a6733c7ba",
+    "syncedAt": "2026-10-10"
+  },
+  "paper2patent": {
+    "source": "github.com/7toCR/paper2patent (skills/paper2patent)",
+    "digest": "329ff21f27e35b2e",
+    "syncedAt": "2026-10-14"
+  }
+}

@@ -1,0 +1,78 @@
+# Dependencies, build output, and package archives (npm pack writes *.tgz here)
+node_modules/
+dist/
+*.tgz
+*.tsbuildinfo
+
+# Local development work, caches, and test reports (npm run test:package uses .work/)
+.work/
+/.cache/
+/coverage/
+/.nyc_output/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Credentials and local model configuration; keep shareable env templates
+.env
+.env.*
+!.env.example
+!.env.*.example
+!.env.sample
+!.env.*.sample
+!.env.template
+!.env.*.template
+.npmrc
+/auth.json
+/models.json
+/settings.json
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Agent credentials, sessions, checkpoints, and extracted source material
+.2pi/
+.pi/
+/.codex/
+/.claude/settings.local.json
+/.claude/worktrees/
+/CLAUDE.local.md
+
+# Private writing workspaces created when running 2pi in this checkout. 2PI.md is matched in
+# any case on Windows and macOS, so it is spelled both ways for case-sensitive checkouts.
+/2PI.md
+/2pi.md
+/PAPER.md
+/materials/
+/notes/
+/paper/
+/patent/
+/research/
+
+# Local reference checkouts and learning notes (runtime skills are in skills/)
+/reference/
+/gudie/
+/guide/
+
+# Logs, temporary files, editor settings, and operating system metadata
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+~$*
+/.vscode/
+/.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini

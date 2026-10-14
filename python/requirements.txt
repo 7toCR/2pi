@@ -1,0 +1,5 @@
+# Drawings and the image-based PDF fallback (required by the skill scripts).
+Pillow>=9
+# Best PDF backend for paper_ingest: text with layout, page images, PDF previews.
+# Without it, paper_ingest falls back to pypdf or Poppler (pdftotext/pdftoppm).
+pymupdf>=1.24

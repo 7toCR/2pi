@@ -88,7 +88,7 @@ if (args.includes("--help") || args.includes("-h")) {
 
 交互界面内：/init  /paper status|init|check|compile|final  /patent <论文> [模式]  /review <草稿> [论文]
           /plan  /changes [编号]  /redline [编号]  /undo  /checkpoints  /research  /panel  /model  /login
-          F2 显示或隐藏右侧流程面板，拖动中间的分隔线调整左右宽度
+          F2 显示或隐藏右侧流程面板，F3 在步骤轨道与树状图之间切换，拖动中间的分隔线调整左右宽度
 
 环境变量：${ENV_PREFIX}CODING_AGENT_DIR（配置目录，默认 ~/.2pi/agent）、${ENV_PREFIX}CODING_AGENT_SESSION_DIR、${ENV_PREFIX}OFFLINE 等
          与 pi 的 PI_* 同义；${ENV_PREFIX}USE_PI_CONFIG=1 直接使用 ~/.pi/agent；${ENV_PREFIX}SPLIT=0 不分栏；

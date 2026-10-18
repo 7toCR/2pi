@@ -15,7 +15,7 @@ import {
 	VStack,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
-import type { FlowModel } from "./flow.ts";
+import { type FlowModel, type FlowView, VIEW_KEY } from "./flow.ts";
 
 /**
  * The split view: pi's transcript on the left (70% by default), the flow panel on the right, a
@@ -33,9 +33,11 @@ export interface SplitPrefs {
 	enabled: boolean;
 	/** Share of the width the transcript gets (default 0.7). */
 	ratio: number;
+	/** What the panel shows: the track of steps (default) or the tree the run grew. */
+	view: FlowView;
 }
 
-export const DEFAULT_PREFS: SplitPrefs = { enabled: true, ratio: 0.7 };
+export const DEFAULT_PREFS: SplitPrefs = { enabled: true, ratio: 0.7, view: "track" };
 const PREFS_FILE = "2pi.json";
 /** Narrower terminals keep one column: the panel would squeeze the transcript too much. */
 export const MIN_SPLIT_WIDTH = 90;
@@ -54,10 +56,11 @@ export function readPrefs(agentDir: string): SplitPrefs {
 	try {
 		const path = join(agentDir, PREFS_FILE);
 		if (!existsSync(path)) return { ...DEFAULT_PREFS };
-		const data = JSON.parse(readFileSync(path, "utf8")) as Partial<{ splitView: unknown; splitRatio: unknown }>;
+		const data = JSON.parse(readFileSync(path, "utf8")) as Partial<{ splitView: unknown; splitRatio: unknown; flowView: unknown }>;
 		return {
 			enabled: typeof data.splitView === "boolean" ? data.splitView : DEFAULT_PREFS.enabled,
 			ratio: typeof data.splitRatio === "number" && data.splitRatio > 0 && data.splitRatio < 1 ? data.splitRatio : DEFAULT_PREFS.ratio,
+			view: data.flowView === "tree" ? "tree" : DEFAULT_PREFS.view,
 		};
 	} catch {
 		return { ...DEFAULT_PREFS };
@@ -71,6 +74,7 @@ export function writePrefs(agentDir: string, prefs: SplitPrefs): void {
 		if (existsSync(path)) data = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
 		data.splitView = prefs.enabled;
 		data.splitRatio = Math.round(prefs.ratio * 1000) / 1000;
+		data.flowView = prefs.view;
 		mkdirSync(agentDir, { recursive: true });
 		writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`, "utf8");
 	} catch {
@@ -126,7 +130,7 @@ export class Splitter implements Component {
 	invalidate(): void {}
 }
 
-/** The flow panel: one column of padding, then the flow model's lines. Clicking a node opens it. */
+/** The flow panel: one column of padding, then the flow model's lines. Clicking a step opens it. */
 export class FlowPanel implements Component {
 	frame = 0;
 	private readonly flow: FlowModel;
@@ -147,8 +151,8 @@ export class FlowPanel implements Component {
 
 	handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
 		if (event.type !== "click" || event.button !== "left") return undefined;
-		// Line 0 is the blank top padding.
-		const key = this.flow.keyAt(event.y - 1);
+		// Line 0 is the blank top padding, column 0 the left one.
+		const key = this.flow.keyAt(event.y - 1, event.x - 1);
 		if (!key) return undefined;
 		this.onSelect(key);
 		return { handled: true };
@@ -311,7 +315,8 @@ export class SplitView {
 		this.prefs = { ...options.prefs };
 		this.savePrefs = options.savePrefs;
 		this.onVisibilityChange = options.onVisibilityChange;
-		this.panel = new FlowPanel(this.flow, this.theme, (key) => this.openDetail(key));
+		this.flow.view = this.prefs.view;
+		this.panel = new FlowPanel(this.flow, this.theme, (key) => this.select(key));
 		this.side = new ScrollView(this.panel, { follow: "none", overscroll: "contain", scrollbar: "auto" });
 		this.splitter = new Splitter({
 			rows: () => this.tui.terminal.rows,
@@ -398,6 +403,24 @@ export class SplitView {
 		return this.prefs.enabled;
 	}
 
+	/** Show the track or the tree; the choice is kept with the other preferences. */
+	setView(view: FlowView): void {
+		this.prefs.view = view;
+		this.flow.view = view;
+		this.savePrefs(this.prefs);
+		this.redraw();
+	}
+
+	toggleView(): FlowView {
+		this.setView(this.prefs.view === "tree" ? "track" : "tree");
+		return this.prefs.view;
+	}
+
+	private redraw(): void {
+		this.dirty = true;
+		this.tui.requestRender();
+	}
+
 	private notifyVisibility(): void {
 		const visible = this.visible;
 		if (visible !== this.wasVisible) {
@@ -431,6 +454,13 @@ export class SplitView {
 	/** The flow changed: draw it on the next tick (ticks are frequent; events can be many). */
 	refresh(): void {
 		this.dirty = true;
+	}
+
+	/** A click on the panel: the footer switches the view, a group row folds, a step opens. */
+	private select(key: string): void {
+		if (key === VIEW_KEY) this.toggleView();
+		else if (this.flow.toggleGroup(key)) this.redraw();
+		else this.openDetail(key);
 	}
 
 	private openDetail(key: string): void {

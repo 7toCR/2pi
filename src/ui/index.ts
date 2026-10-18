@@ -8,7 +8,7 @@ import type { GateOutcome } from "../core/gate.ts";
 import type { ReconnectStatus } from "../core/reconnect.ts";
 import { showPlanWidget } from "../core/tools/update-plan.ts";
 import { type BannerInfo, bannerLines } from "./banner.ts";
-import { FlowModel } from "./flow.ts";
+import { FlowModel, type FlowView } from "./flow.ts";
 import { gateHeadline, registerGateMessage } from "./gate-message.ts";
 import { readPrefs, SplitView, writePrefs } from "./split.ts";
 import { registerCompactToolRows } from "./tool-rows.ts";
@@ -256,32 +256,42 @@ export function installUi(pi: ExtensionAPI, options: UiOptions): UiHandle {
 		description: "显示或隐藏右侧流程面板",
 		handler: (ctx) => togglePanel(ctx),
 	});
+	pi.registerShortcut("f3", {
+		description: "流程面板在步骤轨道与树状图之间切换",
+		handler: (ctx) => switchView(ctx),
+	});
+
+	const noPanel = (ctx: ExtensionContext) =>
+		ctx.ui.notify(
+			splitAllowed ? "流程面板需要全屏界面：在 /settings 中把 TUI mode 设为 fullscreen 后重新启动。" : "流程面板已被 TWOPI_SPLIT=0 关闭。",
+			"info",
+		);
 
 	const togglePanel = (ctx: ExtensionContext, enabled?: boolean) => {
-		if (!split) {
-			ctx.ui.notify(
-				splitAllowed
-					? "流程面板需要全屏界面：在 /settings 中把 TUI mode 设为 fullscreen 后重新启动。"
-					: "流程面板已被 TWOPI_SPLIT=0 关闭。",
-				"info",
-			);
-			return;
-		}
+		if (!split) return noPanel(ctx);
 		split.setEnabled(enabled ?? !split.prefs.enabled);
 		ctx.ui.notify(split.prefs.enabled ? "已显示流程面板（F2 或 /panel off 隐藏）" : "已隐藏流程面板（F2 或 /panel on 显示）", "info");
 	};
 
+	/** The track or the tree; showing either brings a hidden panel back. */
+	const switchView = (ctx: ExtensionContext, view?: FlowView) => {
+		if (!split) return noPanel(ctx);
+		if (!split.prefs.enabled) split.setEnabled(true);
+		split.setView(view ?? (split.prefs.view === "tree" ? "track" : "tree"));
+	};
+
 	pi.registerCommand("panel", {
-		description: "右侧流程面板：/panel 切换，/panel on|off，/panel 65 把左栏设为 65% 宽",
+		description: "右侧流程面板：/panel 切换，/panel on|off，/panel track|tree 轨道或树状图，/panel 65 把左栏设为 65% 宽",
 		getArgumentCompletions: (prefix) =>
-			["on", "off", "70", "60"].filter((value) => value.startsWith(prefix.trim())).map((value) => ({ value, label: value })),
+			["on", "off", "track", "tree", "70", "60"].filter((value) => value.startsWith(prefix.trim())).map((value) => ({ value, label: value })),
 		handler: async (args, ctx) => {
 			const value = args.trim();
 			if (!value) return togglePanel(ctx);
 			if (value === "on" || value === "off") return togglePanel(ctx, value === "on");
+			if (value === "track" || value === "tree") return switchView(ctx, value);
 			const percent = Number(value.replace(/%$/, ""));
 			if (!Number.isFinite(percent) || percent <= 0 || percent >= 100) {
-				ctx.ui.notify("用法：/panel [on|off|左栏宽度百分比，如 70]", "warning");
+				ctx.ui.notify("用法：/panel [on|off|track|tree|左栏宽度百分比，如 70]", "warning");
 				return;
 			}
 			if (!split) return togglePanel(ctx);

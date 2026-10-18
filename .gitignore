@@ -47,6 +47,7 @@ __pycache__/
 # any case on Windows and macOS, so it is spelled both ways for case-sensitive checkouts.
 /2PI.md
 /2pi.md
+/Local.md
 /PAPER.md
 /materials/
 /notes/

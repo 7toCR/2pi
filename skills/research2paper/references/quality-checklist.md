@@ -28,6 +28,8 @@ Use before delivering a full draft and for every pre-submission check. Check onl
 | C02 | WARN | Reference never cited |
 | C03 | INFO | Numeric citations not in order of first appearance |
 | C04 | WARN | Reference entry without a year (verify the record) |
+| C05 | WARN | Cited `.bib` entry a reader could not locate or that misstates what it is: no title/author/year, author list cut off with `and others`, first author without given name, arXiv preprint typed as `@article`, `@article` without journal, `@inproceedings` without booktitle, `@misc` without DOI/URL/eprint/howpublished |
+| C06 | WARN | Named benchmark or dataset (HellaSwag, MMLU, GSM8K, ImageNet …) that no sentence of the body cites; cite its original paper and the protocol followed |
 | A01 / A02 | WARN | Acronym used before its definition / never defined |
 | W01 | WARN | "first", "novel", "state-of-the-art", "outperforms all", "fills the gap" … |
 | W02 | WARN | "significant(ly)" with no statistical evidence in the paragraph |
@@ -80,7 +82,8 @@ Check only against guidelines actually obtained (name the version or access date
 - The paper contains only the research narrative; every remark about the material, the checks and the drafting is in the memo (W06).
 - Each limitation appears once at its claim and once in a Limitations paragraph; the Abstract carries at most one sentence of it; the Conclusion ends on the main line, not on to-dos (W07).
 - Positioning is positive: what the paper does, on what evidence. No run of "we do not claim …" sentences; no concept introduced only to be denied.
-- The Introduction opens with the specific tension the paper resolves and closes with named contributions linked to sections.
+- The Introduction opens with the specific tension the paper resolves, states research questions that the experiments answer one-to-one, and closes with named contributions linked to sections; the Conclusion answers each question.
+- Every baseline, benchmark, dataset, protocol and borrowed component is cited where it is introduced (C06); every cited entry is complete enough to find (C05); the author's reference list and positioning notes are covered or the memo says why not.
 - Related work is organised by the design's axes; each contrast states what prior work does and what this paper does (mechanism facts, not adjectives); no "X lacks …" without evidence from X (W08, W09).
 - Revisions keep the specific facts of the sentences they replace.
 - Implementation conventions sit in an implementation-details paragraph or the supplement, not in the component text (M02); nothing was deleted.

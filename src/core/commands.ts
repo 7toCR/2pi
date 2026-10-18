@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { Pack } from "../packs/types.ts";
 import { initProject, PROJECT_FILE, PROJECT_TYPES, type ProjectType } from "./project.ts";
+import { registerSetupCommands } from "./setup.ts";
 
 /** Create the project layout plus each chosen domain's part (e.g. the LaTeX skeleton for paper). */
 export function initTwoPiProject(cwd: string, type: ProjectType, packs: Pack[]): string {
@@ -39,4 +40,5 @@ export function registerCoreCommands(pi: ExtensionAPI, packs: Pack[]): void {
 			ctx.ui.notify(initTwoPiProject(ctx.cwd, type, packs), "info");
 		},
 	});
+	registerSetupCommands(pi, packs);
 }

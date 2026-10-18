@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
-import { AGENT_ROOT, resolveSkillDir } from "../../core/config.ts";
+import { AGENT_ROOT, env, resolveSkillDir } from "../../core/config.ts";
+import type { DoctorCheck } from "../../core/doctor.ts";
+import { findSoffice } from "../../core/office.ts";
 import { cleanPathArg, normalizePath, slash } from "../../core/paths.ts";
 import { ledgerPath } from "../../core/project.ts";
 import { loadSkill, referenceIndex } from "../../core/skill.ts";
@@ -162,6 +164,32 @@ export function createPatentPack(skillDir?: string): Pack {
 			}
 			if (parts.length === 0) return undefined;
 			return { text: ["专利：本轮修改后的自动检查", ...parts].join("\n\n"), needsFix };
+		},
+
+		doctor() {
+			const group = "专利文件";
+			const soffice = findSoffice();
+			if (soffice) return [{ group, name: "DOCX → PDF", status: "ok", detail: `LibreOffice（${soffice}）` }];
+			if (process.platform === "win32" && !env("NO_WORD")) {
+				return [
+					{
+						group,
+						name: "DOCX → PDF",
+						status: "warn",
+						detail: "没有找到 LibreOffice，将尝试用 Microsoft Word 导出（需要已安装 Word）",
+						fix: "安装 LibreOffice 更稳定，或设置环境变量 SOFFICE 指向 soffice.exe",
+					},
+				] satisfies DoctorCheck[];
+			}
+			return [
+				{
+					group,
+					name: "DOCX → PDF",
+					status: "warn",
+					detail: "没有找到 LibreOffice，只能生成以图片为页面的审阅 PDF",
+					fix: "安装 LibreOffice，或设置环境变量 SOFFICE 指向 soffice",
+				},
+			] satisfies DoctorCheck[];
 		},
 
 		pendingWork(core) {

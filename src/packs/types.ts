@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { BlockExtractor } from "../core/blocks.ts";
+import type { DoctorCheck, DoctorOptions } from "../core/doctor.ts";
 import type { RedlineContext, RedlineOutput } from "../core/redline.ts";
 import type { SkillKnowledge } from "../core/skill.ts";
 import type { CoreState } from "../core/state.ts";
@@ -49,6 +50,8 @@ export interface Pack {
 	pendingWork(core: CoreState): string[];
 	/** Split this domain's documents into reviewable blocks (claims, paragraphs) for change views. */
 	blocks?: BlockExtractor;
+	/** /doctor: this pack's tools and services, checked for real (network checks send fixed test requests only). */
+	doctor?(cwd: string, options: DoctorOptions): Promise<DoctorCheck[]> | DoctorCheck[];
 	/** Redline documents for a range of turns (e.g. a latexdiff PDF, a tracked-changes DOCX). */
 	redline?(context: RedlineContext): Promise<RedlineOutput[]>;
 }

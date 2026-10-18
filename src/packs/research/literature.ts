@@ -1,5 +1,5 @@
-import { env } from "../../core/config.ts";
 import { getJson, getText } from "../../core/online.ts";
+import { serviceKey } from "../../core/services.ts";
 import { normalizeArxiv, normalizeDoi, type Work, workKey } from "./library.ts";
 
 /**
@@ -89,8 +89,8 @@ export function fromOpenAlex(work: OpenAlexWork): Work {
 	return record;
 }
 
-function openAlexParams(params: Record<string, string>): string {
-	const key = env("OPENALEX_KEY");
+export function openAlexParams(params: Record<string, string>): string {
+	const key = serviceKey("OPENALEX_KEY");
 	return new URLSearchParams({ ...params, ...(key ? { api_key: key } : {}) }).toString();
 }
 
@@ -165,17 +165,39 @@ export function parseArxivFeed(xml: string): { works: Work[]; total?: number } {
 	return { works: works.filter((work) => work.arxiv), total: Number.isFinite(total) ? total : undefined };
 }
 
-/** "wavelet denoising \"sliding window\"" → all:wavelet AND all:denoising AND all:"sliding window" */
-export function arxivQuery(query: string): string {
-	const terms = query.match(/"[^"]+"|\S+/g) ?? [];
-	return terms
-		.filter((term) => !/^(and|or|not)$/i.test(term))
-		.map((term) => `all:${term}`)
-		.join(" AND ");
+/** arXiv's search fields; a term that already names one is sent as written. */
+const ARXIV_FIELDS = "ti|au|abs|co|jr|cat|rn|id|all";
+
+/**
+ * "wavelet denoising \"sliding window\"" → all:wavelet AND all:denoising AND all:"sliding window".
+ * Fielded terms (ti:"Mixtral of Experts", au:dao) stay as they are, OR and ANDNOT between terms are
+ * kept (NOT means ANDNOT), and a year range becomes arXiv's submittedDate filter so that it narrows
+ * the search instead of the returned page.
+ */
+export function arxivQuery(query: string, yearFrom?: number, yearTo?: number): string {
+	const terms = query.match(new RegExp(`(?:(?:${ARXIV_FIELDS}):)?"[^"]+"|\\S+`, "gi")) ?? [];
+	const parts: string[] = [];
+	let operator = "AND";
+	for (const term of terms) {
+		const word = term.toUpperCase();
+		if (word === "AND" || word === "OR" || word === "ANDNOT" || word === "NOT") {
+			operator = word === "NOT" ? "ANDNOT" : word;
+			continue;
+		}
+		const fielded = new RegExp(`^(?:${ARXIV_FIELDS}):`, "i").test(term);
+		if (parts.length > 0) parts.push(operator);
+		parts.push(fielded ? term.replace(/^\w+/, (field) => field.toLowerCase()) : `all:${term}`);
+		operator = "AND";
+	}
+	if (yearFrom || yearTo) {
+		const range = `submittedDate:[${yearFrom ?? 1991}01010000 TO ${yearTo ?? 9999}12312359]`;
+		return parts.length > 0 ? `${parts.length > 1 ? `(${parts.join(" ")})` : parts[0]} AND ${range}` : range;
+	}
+	return parts.join(" ");
 }
 
 export async function searchArxiv(q: LitQuery, signal?: AbortSignal): Promise<LitResult> {
-	const sent = arxivQuery(q.query ?? "");
+	const sent = arxivQuery(q.query ?? "", q.yearFrom, q.yearTo);
 	const xml = await getText(`${ARXIV}?${new URLSearchParams({ search_query: sent, start: "0", max_results: String(q.limit) })}`, {
 		signal,
 		timeoutMs: 30_000,

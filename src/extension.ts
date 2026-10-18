@@ -69,6 +69,16 @@ export function resolveActivePacks(cwd: string, packs: Pack[], card: ProjectCard
 	return result([], "没有项目卡，领域未确定");
 }
 
+/**
+ * The launcher's skill filter. pi also discovers the user's general-purpose skills on its own (e.g.
+ * ~/.agents/skills); 2pi does not list those. It keeps project skills, --skill paths, skills listed
+ * in settings, package skills, and skills in 2pi's own config directory.
+ */
+export function keepTwoPiSkill(skill: Skill, agentDir: string | undefined): boolean {
+	const { scope, source } = skill.sourceInfo;
+	return scope !== "user" || source !== "auto" || (!!agentDir && isInside(skill.filePath, agentDir));
+}
+
 function projectState(
 	cwd: string,
 	card: ProjectCard,

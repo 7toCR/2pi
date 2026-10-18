@@ -1,7 +1,9 @@
 import { existsSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
-import { AGENT_ROOT, resolveSkillDir } from "../../core/config.ts";
+import { AGENT_ROOT, ENV_PREFIX, resolveSkillDir } from "../../core/config.ts";
+import type { DoctorCheck } from "../../core/doctor.ts";
 import { cleanPathArg, isInside, slash } from "../../core/paths.ts";
+import { detectRenderer } from "../../core/pdf.ts";
 import { LEGACY_PAPER_FILE, PROJECT_FILE, STATE_DIR } from "../../core/project.ts";
 import { loadSkill, referenceIndex } from "../../core/skill.ts";
 import type { Pack } from "../types.ts";
@@ -200,6 +202,32 @@ export function createPaperPack(skillDir?: string): Pack {
 
 		autoCheck(cwd, _core, signal) {
 			return paperAutoCheck(checkerScript, state, cwd, signal);
+		},
+
+		doctor() {
+			const group = "论文排版";
+			const engine = detectEngine();
+			const renderer = detectRenderer();
+			return [
+				engine
+					? { group, name: "LaTeX", status: "ok", detail: `${engine.engine}（${engine.command}）` }
+					: {
+							group,
+							name: "LaTeX",
+							status: "fail",
+							detail: "没有找到 tectonic 或 latexmk，论文无法编译成 PDF",
+							fix: `安装 tectonic（推荐，单个程序）或 TeX Live / MiKTeX，或设置 ${ENV_PREFIX}TECTONIC / ${ENV_PREFIX}LATEXMK`,
+						},
+				renderer
+					? { group, name: "PDF 预览", status: "ok", detail: `${renderer.kind}（${renderer.command}）` }
+					: {
+							group,
+							name: "PDF 预览",
+							status: "warn",
+							detail: "没有找到 pdftoppm、mutool 或 Ghostscript，模型看不到编译后的页面",
+							fix: "安装 poppler（TeX Live 自带 pdftoppm）、MuPDF 或 Ghostscript",
+						},
+			] satisfies DoctorCheck[];
 		},
 
 		pendingWork() {

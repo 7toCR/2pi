@@ -1,5 +1,5 @@
-import { env } from "../../core/config.ts";
 import { getJson, request } from "../../core/online.ts";
+import { serviceKey } from "../../core/services.ts";
 import type { Patent } from "./library.ts";
 
 /**
@@ -11,7 +11,7 @@ import type { Patent } from "./library.ts";
 const now = () => new Date().toISOString();
 
 export function opsConfigured(): boolean {
-	return !!(env("EPO_OPS_KEY") && env("EPO_OPS_SECRET"));
+	return !!(serviceKey("EPO_OPS_KEY") && serviceKey("EPO_OPS_SECRET"));
 }
 
 /** CQL as written when it already uses CQL syntax; else all words in title or abstract. */
@@ -77,21 +77,23 @@ export function parseOpsSearch(data: unknown): { patents: Patent[]; total?: numb
 	return { patents: patents.filter((p) => /^[A-Z]{2}\d/.test(p.number)), total: Number.isFinite(total) ? total : undefined };
 }
 
-let token: { value: string; expires: number } | undefined;
+// Kept per credentials: a key changed with /setup takes effect on the next request.
+let token: { value: string; expires: number; credentials: string } | undefined;
 
-async function opsToken(signal?: AbortSignal): Promise<string> {
-	if (token && token.expires > Date.now() + 30_000) return token.value;
-	const credentials = Buffer.from(`${env("EPO_OPS_KEY")}:${env("EPO_OPS_SECRET")}`).toString("base64");
+/** An OPS access token; also how /doctor checks that the saved credentials are accepted. */
+export async function opsToken(signal?: AbortSignal): Promise<string> {
+	const credentials = Buffer.from(`${serviceKey("EPO_OPS_KEY") ?? ""}:${serviceKey("EPO_OPS_SECRET") ?? ""}`).toString("base64");
+	if (token && token.credentials === credentials && token.expires > Date.now() + 30_000) return token.value;
 	const res = await request("https://ops.epo.org/3.2/auth/accesstoken", {
 		method: "POST",
 		body: "grant_type=client_credentials",
 		headers: { Authorization: `Basic ${credentials}`, "Content-Type": "application/x-www-form-urlencoded" },
 		signal,
 	});
-	if (!res.ok) throw new Error(`EPO OPS refused the credentials (HTTP ${res.status}); check TWOPI_EPO_OPS_KEY / TWOPI_EPO_OPS_SECRET`);
+	if (!res.ok) throw new Error(`EPO OPS refused the credentials (HTTP ${res.status}); re-enter them with /setup`);
 	const data = (await res.json()) as { access_token?: string; expires_in?: string | number };
 	if (!data.access_token) throw new Error("EPO OPS returned no access token");
-	token = { value: data.access_token, expires: Date.now() + Number(data.expires_in ?? 1200) * 1000 };
+	token = { value: data.access_token, expires: Date.now() + Number(data.expires_in ?? 1200) * 1000, credentials };
 	return token.value;
 }
 

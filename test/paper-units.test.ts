@@ -19,6 +19,7 @@ import {
 	updateEntry,
 } from "../src/core/evidence.ts";
 import { commandRisk, type WriteContext, writeDecision } from "../src/core/guard.ts";
+import { runChecker } from "../src/packs/paper/checker.ts";
 import { parsePages, rendererArgs } from "../src/core/pdf.ts";
 import { ledgerPath } from "../src/core/project.ts";
 import { CoreState } from "../src/core/state.ts";
@@ -26,6 +27,7 @@ import { compare, describeComparison, exact, fmt, parseTable, readCell, resolveQ
 import {
 	checkEntries,
 	compareEntry,
+	eprintDoi,
 	firstAuthorFamily,
 	formatBibResults,
 	normalizeDoi,
@@ -39,7 +41,7 @@ import { initPaperWorkspace, loadPaperConfig } from "../src/packs/paper/config.t
 import { checkTargets } from "../src/packs/paper/gate.ts";
 import { engineArgs, needsUnicodeEngine, parseLatexLog } from "../src/packs/paper/latex.ts";
 import { PaperState } from "../src/packs/paper/state.ts";
-import { BIB, mockFetch, WORKS } from "./fixtures/crossref.ts";
+import { ARXIV_BIB, BIB, mockFetch, WORKS } from "./fixtures/crossref.ts";
 
 function withTemp(body: (cwd: string) => void) {
 	const cwd = mkdtempSync(join(tmpdir(), "2pi-paper-"));
@@ -228,6 +230,8 @@ test("write guard: materials blocked; drafts, new and agent files allowed; exist
 	assert.equal(flag("rm paper/build/main.aux"), undefined);
 });
 
+const CHECKER = join(import.meta.dirname, "..", "skills", "research2paper", "scripts", "check_paper_draft.py");
+
 test("bibliography: parsing, field comparison, every Crossref status without network, retry delays", async () => {
 	const entries = parseBib(BIB);
 	assert.deepEqual(entries.map((e) => e.key), ["doe2020", "roe2019", "lee2021", "nodoi2022", "broken2023"]);
@@ -252,6 +256,66 @@ test("bibliography: parsing, field comparison, every Crossref status without net
 	assert.doesNotMatch(text, /synthetic\.4/);
 	assert.equal(retryDelay(0, null), 1000);
 	assert.equal(retryDelay(0, "120"), 10_000);
+});
+
+test("bibliography: arXiv DOIs and eprints are checked at DataCite; same-title records from other years are not offered", async () => {
+	const entries = parseBib(ARXIV_BIB);
+	assert.equal(eprintDoi(entries[1]!), "10.48550/arxiv.2312.00001");
+	assert.equal(eprintDoi({ type: "misc", key: "x", fields: { eprint: "hep-th/9901001", archiveprefix: "arXiv" } }), undefined);
+	const results = await checkEntries(entries, { fetchFn: mockFetch, search: true });
+	assert.deepEqual(
+		results.map((r) => [r.key, r.status, r.registry, r.doi]),
+		[
+			["gu2023", "record-matches", "DataCite", "10.48550/arxiv.2312.00001"],
+			["eprint2023", "record-matches", "DataCite", "10.48550/arxiv.2312.00001"],
+			["wrongyear2017", "no-doi", undefined, undefined],
+		],
+	);
+	const text = formatBibResults(results);
+	assert.match(text, /gu2023: record matches \(doi:10\.48550\/arxiv\.2312\.00001, DataCite\)/);
+	// The only same-title record is dated 2022, five years from the entry's 2017.
+	assert.match(text, /wrongyear2017: no DOI and no close Crossref record/);
+});
+
+test("checker: incomplete .bib entries (C05) and benchmarks no sentence cites (C06)", async () => {
+	const dir = mkdtempSync(join(tmpdir(), "2pi-checker-"));
+	try {
+		writeFileSync(
+			join(dir, "refs.bib"),
+			[
+				"@misc{vaswani2017, author = {Vaswani and others}, title = {{Attention Is All You Need}}, year = {2017}}",
+				"@article{gu2023, author = {Albert Gu and Tri Dao}, title = {Mamba}, journal = {arXiv}, year = {2023}, eprint = {2312.00752}}",
+				"@inproceedings{zellers2019, author = {Rowan Zellers and Ari Holtzman}, title = {HellaSwag}, booktitle = {Proceedings of ACL}, year = {2019}}",
+				"@misc{unused, title = {Never cited}}",
+			].join("\n"),
+		);
+		writeFileSync(
+			join(dir, "paper.tex"),
+			String.raw`\documentclass{article}
+\begin{document}
+\begin{abstract}We report HellaSwag and MMLU scores.\end{abstract}
+\section{Introduction}
+Attention~\citep{vaswani2017} and selective state spaces~\citep{gu2023} differ in memory.
+\section{Results}
+On HellaSwag~\citep{zellers2019} the hybrid scores higher. On MMLU and ARC-Challenge it scores lower.
+\bibliography{refs}
+\end{document}
+`,
+		);
+		const { report } = await runChecker({ script: CHECKER, input: join(dir, "paper.tex"), bib: join(dir, "refs.bib"), cwd: dir });
+		const of = (code: string) => report.findings.filter((f) => f.code === code).map((f) => f.message);
+		const c05 = of("C05");
+		assert.equal(c05.length, 2, c05.join("\n"));
+		assert.match(c05[0]!, /'vaswani2017'.*and others.*no given name.*@misc without DOI/);
+		assert.match(c05[1]!, /'gu2023'.*arXiv preprint typed as @article/);
+		// HellaSwag is cited once in the body; MMLU and ARC never are; the Abstract needs no citation.
+		assert.deepEqual(
+			of("C06").map((m) => m.split("'")[1]),
+			["MMLU", "ARC-Challenge"],
+		);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
 });
 
 test("PDF page ranges and renderer arguments", () => {

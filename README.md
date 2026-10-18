@@ -354,6 +354,8 @@ my-paper/
 | `/undo [force]` | 撤回上一轮 agent 对文件的修改 |
 | `/checkpoints` | 列出文件检查点 |
 | `/research [works\|patents\|log]` | 调研库与检索日志 |
+| `/setup` | 设置检索服务的 key（OpenAlex、EPO OPS）和本项目的联网检索许可，填写后立即验证 |
+| `/doctor` | 检测模型登录、Python 及依赖、LaTeX、PDF 预览、LibreOffice 和各检索服务，逐项给出修复办法 |
 | `/panel [on\|off\|百分比]` | 显示或隐藏右侧流程面板，或设置左栏宽度 |
 | `/login`、`/logout`、`/model`、`/thinking` | 登录与模型 |
 | `/resume`、`/tree`、`/compact` | 会话管理（pi 自带） |
@@ -409,11 +411,12 @@ research/       调研报告
 
 调研（相关工作、idea 查新式调研、专利现有技术检索）由辅助领域 research 负责，论文和专利项目都能用。项目卡允许联网检索时自动启用，用过一次之后保持启用。
 
-- **联网授权**：只有项目卡写了"联网检索：允许"，或你在终端里对本会话确认过，才会发出请求；只发送检索词，不上传论文、稿件或材料。尚未申请的发明，检索词本身也可能泄露发明点，所以 research skill 要求用领域通用词检索。
+- **配置与检测**：`/setup` 打开设置菜单：填写 OpenAlex API key（可选，提高文献检索额度）、EPO OPS 账号（可选，用于专利检索），开关本项目的联网检索。key 保存在 `~/.2pi/agent/services.json`（Windows 下是 `%USERPROFILE%\.2pi\agent\services.json`），不必设置环境变量；同名环境变量仍然有效且优先。填写后立即发一次测试请求：服务拒绝的 key 不会保存，原来的设置保持不变。也可以直接输入 `/setup openalex <key>`、`/setup epo <key> <secret>`、`/setup clear openalex|epo`、`/setup online on|off`，`/setup status` 查看当前设置。`/doctor` 对每个检索服务发一次固定的测试请求（不含项目内容），连不上、key 无效、额度用完都会写明原因和办法；设置了 `TWOPI_OFFLINE=1` 时跳过联网检测。两个命令在无界面运行时也能用，例如 `2pi -p "/doctor"`，结果直接打印出来。
+- **联网授权**：只有项目卡写了"联网检索：允许"（`/setup` 中可以开关），或你在终端里对本会话确认过，才会发出请求；只发送检索词，不上传论文、稿件或材料。尚未申请的发明，检索词本身也可能泄露发明点，所以 research skill 要求用领域通用词检索。
 - **检索日志**：每次联网请求（服务、检索式原文、时间、结果数）记在 `.2pi/research/searches.jsonl`，`/research log` 查看。
-- **调研库**：检索、获取、导入的文献与专利，以及 `bib_lookup` 在 Crossref 确认存在的 DOI，存入 `.2pi/research/library.json`。
+- **调研库**：检索、获取、导入的文献与专利，以及 `bib_lookup` 在 Crossref 或 DataCite（arXiv 的 DOI 注册在这里）确认存在的 DOI，存入 `.2pi/research/library.json`。
 - **引用核验**：交付前检查扫描本轮写入的 Markdown、LaTeX、.bib 和 JSON。DOI、arXiv 编号、专利公开号如果既不在调研库，也不在作者材料或已解析的论文里，就可能是凭记忆写的，模型必须核实、删除，或明确标注"待核实"。
-- **专利数据库**：设置 `TWOPI_EPO_OPS_KEY`、`TWOPI_EPO_OPS_SECRET`（EPO Open Patent Services 免费注册）后可以直接检索全球专利，包括中国专利。未设置时 `patent_search` 不联网，只给出检索式与 Google Patents / Espacenet 链接；你检索后把导出的 CSV 放进 `materials/`，agent 用 `patent_import` 导入。
+- **专利数据库**：在 `/setup` 中填写 EPO OPS 账号（EPO Open Patent Services 免费注册，也可以用环境变量 `TWOPI_EPO_OPS_KEY`、`TWOPI_EPO_OPS_SECRET`）后可以直接检索全球专利，包括中国专利。未设置时 `patent_search` 不联网，只给出检索式与 Google Patents / Espacenet 链接；你检索后把导出的 CSV 放进 `materials/`，agent 用 `patent_import` 导入。
 - **产出**：调研报告写在 `research/<主题>.md`；专利的检索式与对比文件候选写进专利 JSON 的 `notes["检索与对比文件"]`，生成在撰写说明中，不进申请文本。调研只报告检索范围内看到了什么，不下新颖性或创造性结论。
 
 ### 检查点与修改记录
@@ -471,8 +474,8 @@ research/       调研报告
 | `TWOPI_PDFTOPPM`、`TWOPI_MUTOOL`、`TWOPI_GS`、`TWOPI_PDFINFO` | PDF 渲染工具 |
 | `TWOPI_USE_PI_CONFIG=1` | 复用 `~/.pi/agent` 的登录与配置 |
 | `TWOPI_NO_WORD=1` | 不用 Microsoft Word 导出 PDF |
-| `TWOPI_OPENALEX_KEY` | OpenAlex API key（不设置时用免费额度，约每天 100 次检索） |
-| `TWOPI_EPO_OPS_KEY`、`TWOPI_EPO_OPS_SECRET` | EPO Open Patent Services 账号，用于专利检索 |
+| `TWOPI_OPENALEX_KEY` | OpenAlex API key（不设置时用免费额度，约每天 100 次检索）；也可以用 `/setup` 保存，环境变量优先 |
+| `TWOPI_EPO_OPS_KEY`、`TWOPI_EPO_OPS_SECRET` | EPO Open Patent Services 账号，用于专利检索；也可以用 `/setup` 保存，环境变量优先 |
 | `TWOPI_CLASSIC_UI=1` | 使用 pi 原来的界面样式 |
 | `TWOPI_SPLIT=0` | 不分栏（不显示右侧流程面板） |
 | `TWOPI_RECONNECT_MAX_WAIT` | 无界面运行时断网最多等待的分钟数（默认 10；交互界面一直等待） |

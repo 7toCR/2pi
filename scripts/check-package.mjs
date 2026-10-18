@@ -8,6 +8,7 @@ const { defaultPacks } = await import("../dist/extension.js");
 const required = [
 	"bin/2pi.mjs",
 	"dist/cli.js",
+	"dist/bundle/cli.js",
 	"python/ingest_paper.py",
 	"python/redline_docx.py",
 	"python/requirements.txt",

@@ -35,7 +35,7 @@
 	"scripts": {
 		"start": "node bin/2pi.mjs",
 		"check": "tsc --noEmit",
-		"build": "tsc -p tsconfig.build.json",
+		"build": "tsc -p tsconfig.build.json && node scripts/bundle.mjs",
 		"prepack": "npm run check && npm run build && node scripts/check-package.mjs",
 		"test:package": "node scripts/test-package.mjs",
 		"sync-skills": "node scripts/sync-skills.mjs",
@@ -55,6 +55,7 @@
 	},
 	"devDependencies": {
 		"@types/node": "22.19.19",
+		"esbuild": "0.28.2",
 		"typescript": "5.9.3"
 	},
 	"engines": {

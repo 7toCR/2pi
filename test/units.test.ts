@@ -7,7 +7,8 @@ import { parseCodexToml, piModelDefinition, toPiThinkingLevel } from "../src/cor
 import { commandRisk } from "../src/core/guard.ts";
 import { splitArgs } from "../src/core/paths.ts";
 import { initProject, parseProjectCard } from "../src/core/project.ts";
-import { resolveActivePacks } from "../src/extension.ts";
+import type { Skill } from "@earendil-works/pi-coding-agent";
+import { keepTwoPiSkill, resolveActivePacks } from "../src/extension.ts";
 import type { Pack } from "../src/packs/types.ts";
 
 describe("units", () => {
@@ -108,5 +109,21 @@ describe("units", () => {
 		assert.deepEqual(ids(resolveActivePacks("/x", [paper, patent], { onlineSearch: false })), ["patent"]);
 		assert.deepEqual(ids(resolveActivePacks("/x", [paper], { onlineSearch: false })), ["paper"]);
 		assert.deepEqual(ids(resolveActivePacks("/x", [paper, pack("patent", false)], { onlineSearch: false })), []);
+	});
+
+	test("keepTwoPiSkill hides only the user's auto-discovered skills outside 2pi's config directory", () => {
+		const home = join(tmpdir(), "home");
+		const agentDir = join(home, ".2pi", "agent");
+		const skill = (filePath: string, scope: string, source: string) =>
+			({ filePath, sourceInfo: { path: filePath, scope, source, origin: "top-level" } }) as unknown as Skill;
+		const general = join(home, ".agents", "skills", "s", "SKILL.md");
+		assert.equal(keepTwoPiSkill(skill(general, "user", "auto"), agentDir), false);
+		assert.equal(keepTwoPiSkill(skill(general, "user", "auto"), undefined), false);
+		assert.equal(keepTwoPiSkill(skill(join(agentDir, "skills", "s", "SKILL.md"), "user", "auto"), agentDir), true);
+		// Listed in ~/.2pi/agent/settings.json, from a package, a project, or --skill.
+		assert.equal(keepTwoPiSkill(skill(join(home, "my-skills", "s", "SKILL.md"), "user", "local"), agentDir), true);
+		assert.equal(keepTwoPiSkill(skill(join(agentDir, "npm", "node_modules", "p", "s", "SKILL.md"), "user", "npm:p"), agentDir), true);
+		assert.equal(keepTwoPiSkill(skill(join(home, "proj", ".agents", "skills", "s", "SKILL.md"), "project", "auto"), agentDir), true);
+		assert.equal(keepTwoPiSkill(skill(join(home, "elsewhere", "s", "SKILL.md"), "temporary", "local"), agentDir), true);
 	});
 });

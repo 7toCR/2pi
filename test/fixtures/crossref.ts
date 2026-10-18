@@ -31,9 +31,30 @@ export const WORKS: Record<string, CrossrefWork> = {
 	},
 };
 
+/** arXiv entries: DataCite registers 10.48550/arXiv.* DOIs, Crossref does not. */
+export const ARXIV_BIB = `@misc{gu2023, author = {Albert Gu and Tri Dao}, title = {Synthetic Selective State Spaces}, year = {2023}, doi = {10.48550/arXiv.2312.00001}}
+@misc{eprint2023, author = {Gu, Albert}, title = {Synthetic Selective State Spaces}, year = {2023}, eprint = {2312.00001v2}, archiveprefix = {arXiv}}
+@misc{wrongyear2017, author = {Vaswani and others}, title = {Wavelet Denoising of Synthetic Vibration Data}, year = {2017}}
+`;
+
+export const DATACITE: Record<string, unknown> = {
+	"10.48550/arxiv.2312.00001": {
+		doi: "10.48550/arxiv.2312.00001",
+		titles: [{ title: "Synthetic Selective State Spaces" }],
+		creators: [{ name: "Gu, Albert", familyName: "Gu", givenName: "Albert" }],
+		publicationYear: 2023,
+		types: { resourceTypeGeneral: "Preprint" },
+	},
+};
+
 export const mockFetch: FetchLike = async (url) => {
 	const json = (body: unknown) => ({ status: 200, ok: true, json: async () => body });
+	if (url.startsWith("https://api.datacite.org/dois/")) {
+		const record = DATACITE[decodeURIComponent(url.split("/dois/")[1] ?? "")];
+		return record ? json({ data: { attributes: record } }) : { status: 404, ok: false, json: async () => ({}) };
+	}
 	if (url.includes("/works/")) {
+		if (url.includes("10.48550")) throw new Error("arXiv DOIs must not be sent to Crossref");
 		const doi = decodeURIComponent(url.split("/works/")[1] ?? "");
 		if (doi === "10.0000/fail") throw new Error("connect ETIMEDOUT");
 		const work = WORKS[doi];

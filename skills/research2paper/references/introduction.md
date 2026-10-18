@@ -7,15 +7,18 @@ The Introduction is the reader's first contact with the work. It answers two que
 
 The second answer justifies the first and leads the reader into the paper's logic.
 
-## Three moves
+## Four moves
 
 1. **Background and importance.** Start from the problem area directly relevant to the study and narrow to the specific object. Figures, trends and phenomena need sources; importance is argued with concrete consequences (cost, safety, accuracy, energy, scale), not adjectives such as "crucial" or "of great significance".
 2. **Literature and gap.** Organise prior work by approach, assumption or capability limit — not one paragraph per paper. Show what has been achieved, then the specific problem that remains under the conditions this paper addresses.
-3. **This work.** Map the method, the scope of validation and the supported contributions onto the gap. Contributions can be a method, a finding or a validated application; their number follows the argument, not a template. Add a paper-organisation paragraph only if the journal expects it or the user asks.
+3. **Research questions.** Turn the gap into two to four questions the experiments answer, each naming the variable studied and what is measured ("How much attention can be replaced before in-context behaviour degrades?"). When the design has several knobs, say why they are studied together: which shared constraint (memory, compute, latency, data) couples them. Every question maps to an experiment and a results subsection, and the Conclusion answers each one; a question no experiment answers is dropped, and an experiment no question asks for is moved to the supplement or justified.
+4. **This work.** Map the method, the scope of validation and the supported contributions onto the questions. Contributions can be a method, a finding or a validated application; their number follows the argument, not a template. Add a paper-organisation paragraph only if the journal expects it or the user asks.
 
-Write continuous prose. Do not leave "Background / Literature review / Thesis statement" labels in the paper.
+Write continuous prose. The questions may be an inline list ("We ask: (i) …; (ii) …") or stated as objectives; do not leave "Background / Literature review / Thesis statement" labels in the paper.
 
-If a separate Related Work section exists, keep only the overview needed for motivation in the Introduction and move detailed comparisons there.
+**Separate Related Work section.** Machine-learning and computer-science venues (ICLR, NeurIPS, ACL, CVPR, IEEE Transactions …) expect one, and the LaTeX skeleton includes `sections/related_work.tex`. Keep in the Introduction only the two or three sentences of prior work the motivation needs; the axis-by-axis comparison goes to Related Work, one subsection or paragraph per axis, optionally with a comparison table (rows: closest works and this paper; columns: the axes, scale and evaluation; unknown cells "—"). Journals that keep the literature review inside the Introduction: delete the file and its `\input`.
+
+**Use the author's positioning notes.** Materials often already say how the team sees prior work (scales reached, tasks evaluated, where earlier hybrids fell short). Every such item goes into the axis grid — verified against the cited work itself before it is written as fact — or into the memo with the reason it was left out. These notes are usually where the gap is.
 
 ## Open with the specific tension
 
@@ -76,4 +79,4 @@ From the DR_CAN notes: cite recent work (≈ last five years), choose references
 
 ## Self-check
 
-A reader of the Introduction alone can say: what the problem is, how the closest works handle each design axis and how this paper differs (in mechanism, not adjectives), why each part of the design answers that shortfall, what this paper contributes and where each contribution is evaluated. If the gap still lacks literature, keep the marker and flag it in the memo. No conclusions or numbers appear that the Results do not deliver.
+A reader of the Introduction alone can say: what the problem is, how the closest works handle each design axis and how this paper differs (in mechanism, not adjectives), why each part of the design answers that shortfall, which questions the experiments answer, what this paper contributes and where each contribution is evaluated. If the gap still lacks literature, keep the marker and flag it in the memo. No conclusions or numbers appear that the Results do not deliver.

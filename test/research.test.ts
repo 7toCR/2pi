@@ -104,6 +104,14 @@ describe("providers", () => {
 		assert.match(toBibtex(preprint!), /^@misc\{poe2022synthetic,[\s\S]*eprint = \{2202\.00002\}/);
 		assert.match(toBibtex(work), /^@article\{doe2021adaptive,[\s\S]*journal = \{Journal of Synthetic Signals\}/);
 		assert.equal(arxivQuery('wavelet "noise floor" AND window'), 'all:wavelet AND all:"noise floor" AND all:window');
+		// Fielded terms are sent as written (all:ti:"… made arXiv answer HTTP 400), operators survive.
+		assert.equal(arxivQuery('ti:"Mixtral of Experts"'), 'ti:"Mixtral of Experts"');
+		assert.equal(arxivQuery('TI:"Mamba" AND ti:"Selective State Spaces"'), 'ti:"Mamba" AND ti:"Selective State Spaces"');
+		assert.equal(arxivQuery('ti:hybrid OR au:dao NOT abs:vision'), "ti:hybrid OR au:dao ANDNOT abs:vision");
+		assert.equal(arxivQuery("speech recognition"), "all:speech AND all:recognition");
+		// Years narrow the search itself, not only the page that comes back.
+		assert.equal(arxivQuery('ti:"Attention Is All You Need"', 2017, 2017), 'ti:"Attention Is All You Need" AND submittedDate:[201701010000 TO 201712312359]');
+		assert.equal(arxivQuery("mamba moe", 2023), "(all:mamba AND all:moe) AND submittedDate:[202301010000 TO 999912312359]");
 	});
 
 	test("EPO OPS JSON and database CSV exports become library patents", () => {

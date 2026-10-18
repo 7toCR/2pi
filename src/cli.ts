@@ -6,10 +6,9 @@ import { isSelfUpdate, rebrandPiText } from "./core/branding.ts";
 import { importCodexConfig } from "./core/codex-import.ts";
 import { initTwoPiProject } from "./core/commands.ts";
 import { AGENT_NAME, AGENT_ROOT, AGENT_TITLE, ENV_PREFIX, env } from "./core/config.ts";
-import { isInside } from "./core/paths.ts";
 import { importPiConfig } from "./core/pi-import.ts";
 import { PROJECT_TYPES } from "./core/project.ts";
-import { createTwoPiExtension, defaultPacks } from "./extension.ts";
+import { createTwoPiExtension, defaultPacks, keepTwoPiSkill } from "./extension.ts";
 import { applyUiDefaults } from "./ui/defaults.ts";
 
 const args = process.argv.slice(2);
@@ -106,12 +105,10 @@ if (args.includes("--help") || args.includes("-h")) {
 	console.log = (...parts: unknown[]) => log(...parts.map((part) => (typeof part === "string" ? rebrandPiText(part) : part)));
 }
 
-// 2pi does not list the user's general-purpose skills (e.g. ~/.agents/skills): it keeps project
-// skills, --skill paths, and skills installed into 2pi's own config directory.
+// 2pi does not list the general-purpose skills pi discovers for the user (e.g. ~/.agents/skills);
+// skills the user lists in settings or installs into 2pi's config directory stay.
 const agentDir = process.env.PI_CODING_AGENT_DIR;
-const factory = createTwoPiExtension({
-	keepSkill: (skill) => skill.sourceInfo.scope !== "user" || (!!agentDir && isInside(skill.filePath, agentDir)),
-});
+const factory = createTwoPiExtension({ keepSkill: (skill) => keepTwoPiSkill(skill, agentDir) });
 
 // 2pi's display defaults go into its own config directory only, never into ~/.pi.
 if (!env("USE_PI_CONFIG")) applyUiDefaults(getAgentDir());

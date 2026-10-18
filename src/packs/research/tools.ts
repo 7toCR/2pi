@@ -2,10 +2,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { StringEnum, Type } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { env } from "../../core/config.ts";
 import { ensureOnline, logSearch, request } from "../../core/online.ts";
 import { cleanPathArg, isInside, slash } from "../../core/paths.ts";
 import { STATE_DIR } from "../../core/project.ts";
+import { serviceKey } from "../../core/services.ts";
 import type { CoreState } from "../../core/state.ts";
 import { addToLibrary, normalizeDoi, type Work } from "./library.ts";
 import {
@@ -99,10 +99,13 @@ export function registerResearchTools(pi: ExtensionAPI, core: CoreState): void {
 		promptSnippet: "检索学术文献（OpenAlex/arXiv/Crossref），结果进入调研库",
 		promptGuidelines: [
 			"调研时先写出检索策略再检索；引用的每篇文献都必须来自 lit_search / lit_fetch / bib_lookup 的结果或作者材料，不凭记忆补 DOI、arXiv 编号或作者年份",
+			"已知题名的经典文献按题名检索常混入同名无关条目：先用 source arxiv 加 ti:\"完整题名\"，或用 lit_fetch 按编号取回记录后核对题名与作者",
 		],
 		executionMode: "sequential",
 		parameters: Type.Object({
-			query: Type.Optional(Type.String({ description: "检索词（英文效果最好）；双引号表示短语" })),
+			query: Type.Optional(
+				Type.String({ description: "检索词（英文效果最好）；双引号表示短语；arxiv 还可用 ti:/au:/abs: 字段与 OR、ANDNOT，如 ti:\"Mixtral of Experts\"" }),
+			),
 			source: Type.Optional(StringEnum(["openalex", "arxiv", "crossref"] as const, { description: "默认 openalex" })),
 			year_from: Type.Optional(Type.Integer({ minimum: 1900, maximum: 2100 })),
 			year_to: Type.Optional(Type.Integer({ minimum: 1900, maximum: 2100 })),
@@ -142,7 +145,10 @@ export function registerResearchTools(pi: ExtensionAPI, core: CoreState): void {
 				logSearch(ctx.cwd, { tool: "lit_search", service: SOURCE_NAME[source], query: query.query ?? "", error: message(error) });
 				// OpenAlex meters its free tier per day; Crossref still answers plain searches.
 				if (source !== "openalex" || !query.query || query.citing || query.referencedBy) throw error;
-				note = `OpenAlex 不可用（${message(error)}），改用 Crossref（无摘要与开放获取链接；可设置 TWOPI_OPENALEX_KEY 提高额度）。\n`;
+				const refused = /HTTP 40[13]\b/.test(message(error)) && !!serviceKey("OPENALEX_KEY");
+				note = refused
+					? `OpenAlex 拒绝了已配置的 API key（${message(error)}），改用 Crossref。请用户在 /setup 重新填写或清除 OpenAlex key，/doctor 可检测。\n`
+					: `OpenAlex 不可用（${message(error)}），改用 Crossref（无摘要与开放获取链接；用户可在 /setup 填写 OpenAlex key 提高额度，/doctor 可检测网络与服务）。\n`;
 				source = "crossref";
 				result = await run(source);
 			}
@@ -230,7 +236,7 @@ export function registerResearchTools(pi: ExtensionAPI, core: CoreState): void {
 		name: "patent_search",
 		label: "Patent search",
 		description:
-			"检索专利（检索式或关键词，英文效果最好）。配置了 EPO OPS（TWOPI_EPO_OPS_KEY / TWOPI_EPO_OPS_SECRET）时直接检索全球专利（含中国），结果进入调研库；未配置时不联网，只返回 Google Patents、Espacenet 的检索链接：把检索式和链接交给用户，请用户导出 CSV 放进 materials/ 后用 patent_import 导入。",
+			"检索专利（检索式或关键词，英文效果最好）。配置了 EPO OPS（用户在 /setup 填写，或环境变量 TWOPI_EPO_OPS_KEY / TWOPI_EPO_OPS_SECRET）时直接检索全球专利（含中国），结果进入调研库；未配置时不联网，只返回 Google Patents、Espacenet 的检索链接：把检索式和链接交给用户，请用户导出 CSV 放进 materials/ 后用 patent_import 导入。",
 		promptSnippet: "检索专利（EPO OPS；未配置时给出检索链接，由用户导出后导入）",
 		promptGuidelines: [
 			"专利公开号只能来自 patent_search / patent_import 的结果或作者材料；未检索到就写检索式和待检索事项，不要凭记忆列对比文件",
@@ -310,10 +316,10 @@ export function registerResearchTools(pi: ExtensionAPI, core: CoreState): void {
 /** Which optional services are configured, for /research and the prompt. */
 export function serviceStatus(): string {
 	return [
-		`OpenAlex${env("OPENALEX_KEY") ? "（已配置 API key）" : "（免费额度，约每天 100 次检索）"}`,
+		`OpenAlex${serviceKey("OPENALEX_KEY") ? "（已配置 API key）" : "（免费额度，约每天 100 次检索；/setup 可填写 key）"}`,
 		"arXiv",
 		"Crossref",
-		opsConfigured() ? "EPO OPS（已配置）" : "EPO OPS 未配置（专利检索改为给出链接 + 导入 CSV）",
+		opsConfigured() ? "EPO OPS（已配置）" : "EPO OPS 未配置（专利检索改为给出链接 + 导入 CSV；/setup 可填写账号）",
 	].join("、");
 }
 

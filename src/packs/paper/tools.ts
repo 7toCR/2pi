@@ -238,8 +238,8 @@ export function createBibLookupTool(fetchFn?: FetchLike) {
 		name: "bib_lookup",
 		label: "Check bibliography",
 		description:
-			"Check .bib entries against Crossref: for an entry with a DOI, whether the DOI is registered and whether title, year and first author match the record; for an entry without a DOI, list close Crossref records as leads. Read-only: it never edits the .bib. A matching record does not show that the work supports the sentence citing it. Sends only the cited works' DOI, title, first author and year to api.crossref.org, never the manuscript.",
-		promptSnippet: "Check .bib entries against Crossref records (DOI exists, title/year/first author match)",
+			"Check .bib entries against Crossref, and against DataCite for DOIs Crossref does not register (arXiv's 10.48550/arXiv.*, Zenodo, figshare): for an entry with a DOI or an arXiv eprint, whether it is registered and whether title, year and first author match the record; for an entry without either, list close Crossref records from about the same year as leads. Read-only: it never edits the .bib. A matching record does not show that the work supports the sentence citing it. Sends only the cited works' DOI, eprint, title, first author and year to api.crossref.org and api.datacite.org, never the manuscript.",
+		promptSnippet: "Check .bib entries against Crossref/DataCite records (DOI exists, title/year/first author match)",
 		promptGuidelines: [
 			"Use bib_lookup before delivery when the paper has references; put every difference, unregistered DOI, entry without DOI and failed lookup under 待核验事项. Never add a reference, or a DOI from the possible records, that the author has not confirmed.",
 		],

@@ -107,7 +107,7 @@ export async function ensureOnline(ctx: ExtensionContext, core: CoreState): Prom
 	if (ctx.hasUI) {
 		const ok = await ctx.ui.confirm(
 			"允许联网检索？",
-			`本会话中 2pi 会把检索词发送给 ${SEARCH_SERVICES}；论文、稿件和材料不会上传，每次检索都记在 /research 中。尚未申请的发明，检索词本身也可能泄露发明点。在项目卡 2PI.md 写"联网检索：允许"后不再询问。`,
+			`本会话中 2pi 会把检索词发送给 ${SEARCH_SERVICES}；论文、稿件和材料不会上传，每次检索都记在 /research 中。尚未申请的发明，检索词本身也可能泄露发明点。在 /setup 中开启本项目联网检索（即项目卡 2PI.md 写"联网检索：允许"）后不再询问。`,
 		);
 		if (ok) {
 			core.onlineGranted = true;
@@ -116,7 +116,7 @@ export async function ensureOnline(ctx: ExtensionContext, core: CoreState): Prom
 		throw new Error("用户没有允许联网检索。不要再次尝试检索；改为写出检索式，让用户自己检索后把结果导出给你。");
 	}
 	throw new Error(
-		'项目卡 2PI.md 没有允许联网检索（需要写"联网检索：允许"），本次没有发出任何请求。不要修改项目卡；告诉用户需要授权，或者改为写出检索式，让用户自己检索后把结果导出给你。',
+		'项目卡 2PI.md 没有允许联网检索（需要写"联网检索：允许"），本次没有发出任何请求。不要修改项目卡；告诉用户可以用 /setup online on 授权，或者改为写出检索式，让用户自己检索后把结果导出给你。',
 	);
 }
 

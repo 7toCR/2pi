@@ -14,7 +14,9 @@ reports the defects that are easy to miss when re-reading your own draft:
   ("the figure above"), mixed numbering styles, missing panels, undefined
   LaTeX labels;
 - citations: keys or numbers missing from the reference list / .bib,
-  references never cited, entries without a year;
+  references never cited, entries without a year, .bib entries a reader could
+  not locate (truncated authors, arXiv typed as a journal, @misc without a
+  locator), named benchmarks and datasets that no sentence cites;
 - acronyms used before their definition or never defined;
 - claim strength: priority/superlative claims, "significant" without
   statistics, absolute wording, percentage differences written as relative
@@ -1008,6 +1010,7 @@ def check_citations(doc: Document, report: Report, bib: Path | None) -> None:
                                         "(pass --bib refs.bib).")
             return
         cited_keys = {k for k, _ in cites}
+        check_bib_entries(bibs, report, cited_keys)
         for key, ln in cites:
             if key not in keys and key != "*":
                 report.error("C01", where(ln), f"Citation key '{key}' is not in the bibliography.")
@@ -1061,6 +1064,8 @@ def check_citations(doc: Document, report: Report, bib: Path | None) -> None:
     cited = {}
     for key, ln in cites:
         cited.setdefault(key, ln)
+    if bib:
+        check_bib_entries([bib], report, set(cited) or None)
     for key, ln in cited.items():
         if key not in known:
             report.error("C01", where(ln), f"Citation [{key}] has no entry in the reference list.")
@@ -1083,10 +1088,138 @@ def check_citations(doc: Document, report: Report, bib: Path | None) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Checks: bibliography entries and dataset provenance
+# --------------------------------------------------------------------------- #
+
+def read_bib_entries(path: Path) -> list[tuple[str, str, dict[str, str]]]:
+    """(type, key, fields) per entry; field names lower-cased, outer braces or quotes removed."""
+    text = path.read_text(encoding="utf-8", errors="replace")
+    entries = []
+    for m in re.finditer(r"@(\w+)\s*\{\s*([^,\s]+)\s*,", text):
+        kind = m.group(1).lower()
+        if kind in ("comment", "preamble", "string"):
+            continue
+        fields: dict[str, str] = {}
+        i = m.end()
+        while i < len(text):
+            while i < len(text) and text[i] in " \t\r\n,":
+                i += 1
+            if i >= len(text) or text[i] == "}":
+                break
+            name = re.match(r"([\w-]+)\s*=\s*", text[i:])
+            if not name:
+                break
+            i += name.end()
+            if i < len(text) and text[i] == "{":
+                depth, start = 0, i
+                while i < len(text):
+                    depth += {"{": 1, "}": -1}.get(text[i], 0)
+                    if depth == 0:
+                        break
+                    i += 1
+                value, i = text[start + 1:i], i + 1
+            elif i < len(text) and text[i] == '"':
+                end = text.find('"', i + 1)
+                end = len(text) if end < 0 else end
+                value, i = text[i + 1:end], end + 1
+            else:
+                bare = re.match(r"[^,}\s]*", text[i:])
+                value = bare.group(0) if bare else ""
+                i += len(value)
+            fields[name.group(1).lower()] = re.sub(r"\s+", " ", value).strip()
+        entries.append((kind, m.group(2), fields))
+    return entries
+
+
+ARXIV_VENUE_RE = re.compile(r"^\W*(?:arxiv|corr)\b", re.I)
+
+
+def bib_entry_problems(kind: str, fields: dict[str, str]) -> list[str]:
+    problems = []
+    if not fields.get("title"):
+        problems.append("no title")
+    author = fields.get("author", "")
+    if not (author or fields.get("editor") or fields.get("organization") or fields.get("institution")):
+        problems.append("no author")
+    elif author:
+        names = [a.strip() for a in re.split(r"\s+and\s+", author) if a.strip()]
+        if names and names[-1].lower() == "others":
+            problems.append("author list cut off with 'and others'; give the full list from the record")
+        first = names[0] if names else ""
+        if first and not first.startswith("{") and "," not in first and len(first.split()) == 1 and first.lower() != "others":
+            problems.append(f"first author '{first}' has no given name")
+    if not re.search(r"\d{4}", fields.get("year", "") + fields.get("date", "")):
+        problems.append("no year")
+    if kind == "article":
+        journal = fields.get("journal", "")
+        if not journal:
+            problems.append("@article without journal")
+        elif ARXIV_VENUE_RE.match(journal):
+            problems.append("arXiv preprint typed as @article (journal = arXiv); use @misc with eprint and "
+                            "archiveprefix, or the published version if there is one")
+    if kind in ("inproceedings", "conference") and not fields.get("booktitle"):
+        problems.append(f"@{kind} without booktitle")
+    if kind == "misc" and not any(fields.get(k) for k in ("doi", "url", "eprint", "howpublished", "isbn")):
+        problems.append("@misc without DOI, URL, eprint or howpublished: a reader cannot find it")
+    return problems
+
+
+def check_bib_entries(bibs: list[Path], report: Report, cited: set[str] | None) -> None:
+    """C05: entries a reader could not locate or that misstate what they are. Only cited ones when known."""
+    for bib in bibs:
+        for kind, key, fields in read_bib_entries(bib):
+            if cited and key not in cited:
+                continue
+            problems = bib_entry_problems(kind, fields)
+            if problems:
+                report.warn("C05", bib.name, f"Bib entry '{key}' is incomplete: {'; '.join(problems)}.")
+
+
+# Benchmarks and datasets that have an original paper (or canonical source) to cite. Each group is one
+# resource under its usual spellings; bare short names that clash with ordinary words are left out.
+DATASETS: list[tuple[str, list[str]]] = [
+    (n, [n]) for n in (
+        "HellaSwag", "WinoGrande", "PIQA", "BoolQ", "QuAC", "CoQA", "SQuAD", "GSM8K", "HumanEval", "MBPP", "MMLU",
+        "TruthfulQA", "TriviaQA", "NarrativeQA", "Qasper", "CUAD", "L-Eval", "LongBench", "ZeroSCROLLS", "RULER",
+        "Banking77", "CLINC150", "IMDB", "SST-2", "GLUE", "SuperGLUE", "LAMBADA", "OpenBookQA",
+        "CommonsenseQA", "WikiText-103", "ImageNet", "CIFAR-10", "CIFAR-100", "MNIST", "Cityscapes", "LibriSpeech",
+        "MS COCO", "Long Range Arena", "Natural Questions",
+    )
+] + [
+    ("ARC", ["ARC-Easy", "ARC-Challenge", "ARC-E", "ARC-C", "AI2 Reasoning Challenge"]),
+    ("BIG-Bench Hard", ["BIG-Bench Hard", "BBH"]),
+    ("TREC", ["TREC", "TREC-Fine", "TREC-Coarse"]),
+    ("Needle-in-a-haystack", ["needle-in-a-haystack", "needle in a haystack"]),
+]
+
+
+def check_dataset_citations(doc: Document, report: Report) -> None:
+    """C06: a named benchmark or dataset that no sentence of the body cites (the Abstract carries no citations)."""
+    body = [ln for ln in doc.lines if ln.kind not in NON_BODY and ln.kind != "abstract" and not ln.heading]
+    seen: dict[str, tuple[str, Line]] = {}
+    cited: set[str] = set()
+    for para in paragraphs(body):
+        raw = MISSING_RE.sub(" ", " ".join(ln.raw for ln in para))
+        for sent in sentences(raw):
+            has_cite = bool(CITE_TOKEN_RE.search(sent) or TEX_CITE_RE.search(sent))
+            for group, aliases in DATASETS:
+                for alias in aliases:
+                    if re.search(rf"(?<![\w-]){re.escape(alias)}(?![\w-])", sent, 0 if alias[0].isupper() else re.I):
+                        seen.setdefault(group, (alias, para[0]))
+                        if has_cite:
+                            cited.add(group)
+                        break
+    for group, (alias, ln) in seen.items():
+        if group not in cited:
+            report.warn("C06", where(ln), f"'{alias}' is used but no sentence mentioning it cites a source; cite the "
+                                          f"benchmark's original paper (and the protocol followed, if different).")
+
+
+# --------------------------------------------------------------------------- #
 # Checks: acronyms
 # --------------------------------------------------------------------------- #
 
-ACRONYM_RE = re.compile(r"\b([A-Z][A-Z0-9]*[A-Z][A-Z0-9]*)(s?)\b")
+ACRONYM_RE =re.compile(r"\b([A-Z][A-Z0-9]*[A-Z][A-Z0-9]*)(s?)\b")
 COMMON_ACRONYMS = {
     "AI", "CPU", "GPU", "TPU", "RAM", "ROM", "USB", "PDF", "URL", "HTTP", "HTTPS", "API", "IEEE", "ACM", "ISO", "SI",
     "USA", "UK", "EU", "UN", "WHO", "DNA", "RNA", "PCR", "MRI", "CT", "ECG", "EEG", "LED", "GPS", "ID", "OK", "PC",
@@ -1741,6 +1874,7 @@ def run_checks(doc: Document, args: argparse.Namespace, notes_text: str | None =
             check_structure_limits_only(doc, report, args)
     check_crossrefs(doc, report, mode)
     check_citations(doc, report, args.bib)
+    check_dataset_citations(doc, report)
     check_acronyms(doc, report)
     check_wording(doc, report, mode, masked)
     check_paper_layer(doc, report, mode, masked)

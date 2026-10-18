@@ -36,7 +36,7 @@ const packed = JSON.parse(run(process.execPath, [npmCli, "pack", "--json", "--pa
 const { filename, files } = packed[0];
 const paths = new Set(files.map((file) => file.path));
 for (const path of [
-	"dist/cli.js", "bin/2pi.mjs", "python/requirements.txt", "templates/2PI.md",
+	"dist/cli.js", "dist/bundle/cli.js", "bin/2pi.mjs", "python/requirements.txt", "templates/2PI.md",
 	"skills/paper2patent/SKILL.md", "skills/paper2patent/LICENSE",
 	"skills/paper2patent/scripts/generate_patent_docx.py",
 	"skills/research2paper/SKILL.md", "skills/research/SKILL.md",

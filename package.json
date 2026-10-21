@@ -1,6 +1,6 @@
 {
 	"name": "@7tocr/2pi",
-	"version": "0.0.3",
+	"version": "0.0.4",
 	"description": "2pi: a research-writing agent built on pi — research material to paper draft, paper to Chinese invention patent application draft",
 	"type": "module",
 	"repository": {

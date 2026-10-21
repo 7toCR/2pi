@@ -274,13 +274,19 @@ describe("startup header", () => {
 });
 
 describe("split view", () => {
-	function piLayout() {
-		const transcript = new ScrollView(new Text("transcript line", 0, 0), { follow: "end", primary: true });
+	/** The component as pi's own copy of pi-tui makes it in the packed 2pi: not an instance of 2pi's classes. */
+	const foreign = <T extends object>(component: T): T => new Proxy(component, { getPrototypeOf: () => Object.prototype });
+
+	function piLayout(options: { foreign?: boolean } = {}) {
+		const wrap = <T extends object>(component: T) => (options.foreign ? foreign(component) : component);
+		const transcript = wrap(new ScrollView(new Text("transcript line", 0, 0), { follow: "end", primary: true }));
 		const dock = new VStack([new Text("editor here", 0, 0)]);
-		const root = new VStack([
-			{ component: transcript, basis: 0, grow: 1, shrink: 1, minSize: 1 },
-			{ component: dock, basis: "auto", grow: 0, shrink: 1, minSize: 1 },
-		]);
+		const root = wrap(
+			new VStack([
+				{ component: transcript, basis: 0, grow: 1, shrink: 1, minSize: 1 },
+				{ component: dock, basis: "auto", grow: 0, shrink: 1, minSize: 1 },
+			]),
+		);
 		const tui = {
 			mode: "fullscreen",
 			terminal: { columns: 120, rows: 20 },
@@ -297,19 +303,32 @@ describe("split view", () => {
 	}
 
 	const frame = (root: unknown, width = 120, height = 20) => renderLayoutFrame(root as never, width, height, () => {});
-	const mouse = (type: TuiMouseEvent["type"], screenX: number): TuiMouseEvent => ({
+	const mouse = (type: TuiMouseEvent["type"], screenX: number, screenY = 5): TuiMouseEvent => ({
 		type,
 		button: "left",
 		x: 0,
 		y: 0,
 		screenX,
-		screenY: 5,
+		screenY,
 		width: 1,
 		height: 20,
 		shift: false,
 		alt: false,
 		ctrl: false,
 	});
+	/**
+	 * pi's TUI handing a mouse event to the layout: the boxes under the pointer, innermost first.
+	 * pi passes over containers that keep its own copy's default handler; the packed 2pi's
+	 * containers come from another copy of pi-tui, so pi calls all of them, as here.
+	 */
+	const dispatch = (root: unknown, event: TuiMouseEvent) => {
+		for (const box of getLayoutBoxesAt(frame(root), event.screenX, event.screenY)) {
+			const { x, y, width, height } = box.rect;
+			const result = box.component.handleMouse?.({ ...event, x: event.screenX - x, y: event.screenY - y, width, height });
+			if (result && ("target" in result || result.handled || result.capture || result.focus)) return result;
+		}
+		return undefined;
+	};
 
 	test("pi's transcript gets 70% on the left, the panel the rest, the input dock stays full width", () => {
 		const { root, tui } = piLayout();
@@ -356,6 +375,31 @@ describe("split view", () => {
 		assert.equal(tui.layoutRoot, root);
 	});
 
+	test("only a press on the divider grabs it; elsewhere the press stays pi's (text selection)", () => {
+		const { tui } = piLayout();
+		const split = new SplitView({ tui: tui as unknown as TUI, flow: new FlowModel(), theme: () => plainTheme, prefs: { enabled: true, ratio: 0.7, view: "track" }, savePrefs() {} });
+		split.ensure();
+		const divider = Math.floor(119 * 0.7);
+		// Below the transcript's only line, beside it on the panel, and on the input dock.
+		for (const [x, y] of [[10, 5], [10, 15], [100, 12], [10, 19]] as const) {
+			assert.equal(dispatch(tui.layoutRoot, mouse("press", x, y)), undefined, `press at ${x},${y}`);
+		}
+		assert.equal(dispatch(tui.layoutRoot, mouse("press", divider, 15))?.capture, true);
+		split.dispose();
+	});
+
+	test("pi's layout made by its own copy of pi-tui (the packed 2pi) is split the same way", () => {
+		const { root, tui } = piLayout({ foreign: true });
+		const split = new SplitView({ tui: tui as unknown as TUI, flow: new FlowModel(), theme: () => plainTheme, prefs: { enabled: true, ratio: 0.7, view: "track" }, savePrefs() {} });
+		split.ensure();
+		const lines = plain(frame(tui.layoutRoot).lines);
+		assert.equal(lines[3]?.search(/[│┃]/), Math.floor(119 * 0.7));
+		assert.match(lines.at(-1) ?? "", /^editor here\s*$/, "the input dock spans both columns");
+		assert.equal(dispatch(tui.layoutRoot, mouse("press", 10, 5)), undefined);
+		split.dispose();
+		assert.equal(tui.layoutRoot, root);
+	});
+
 	test("a narrow terminal hides the panel; pi replacing its root is wrapped again", () => {
 		const { root, tui } = piLayout();
 		const split = new SplitView({ tui: tui as unknown as TUI, flow: new FlowModel(), theme: () => plainTheme, prefs: { enabled: true, ratio: 0.7, view: "track" }, savePrefs() {} });
@@ -370,13 +414,16 @@ describe("split view", () => {
 		split.dispose();
 	});
 
-	test("the divider keeps both columns usable, and preferences live in 2pi's own file", () => {
+	test("the divider keeps both columns usable, starts at the right, and preferences live in 2pi's own file", () => {
 		assert.equal(clampRatio(0.95, 120), 1 - 28 / 120);
 		assert.equal(clampRatio(0.1, 120), 44 / 120);
-		assert.equal(clampRatio(Number.NaN, 120), 0.7);
+		assert.equal(clampRatio(Number.NaN, 120), 1 - 28 / 120);
+		assert.equal(clampRatio(Number.NaN, 300), 0.85);
 		const dir = mkdtempSync(join(tmpdir(), "2pi-split-"));
 		try {
-			assert.deepEqual(readPrefs(dir), { enabled: true, ratio: 0.7, view: "track" });
+			// No saved position yet: the divider as far right as it goes.
+			assert.deepEqual(readPrefs(dir), { enabled: true, ratio: 0.85, view: "track" });
+			assert.equal(clampRatio(readPrefs(dir).ratio, 120), clampRatio(1, 120));
 			writePrefs(dir, { enabled: false, ratio: 0.6123, view: "tree" });
 			assert.deepEqual(readPrefs(dir), { enabled: false, ratio: 0.612, view: "tree" });
 			assert.deepEqual(JSON.parse(readFileSync(join(dir, "2pi.json"), "utf8")), { splitView: false, splitRatio: 0.612, flowView: "tree" });

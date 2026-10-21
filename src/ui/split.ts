@@ -18,8 +18,9 @@ import {
 import { type FlowModel, type FlowView, VIEW_KEY } from "./flow.ts";
 
 /**
- * The split view: pi's transcript on the left (70% by default), the flow panel on the right, a
- * divider between them that can be dragged with the mouse, and pi's input dock across the bottom.
+ * The split view: pi's transcript on the left, the flow panel on the right (as narrow as it goes
+ * until the divider is first dragged), a divider between them that can be dragged with the mouse,
+ * and pi's input dock across the bottom.
  *
  * pi builds its fullscreen layout itself (a VStack of the transcript ScrollView and the dock);
  * extensions get no hook into it, so 2pi wraps the layout root the renderer was given. The
@@ -31,13 +32,14 @@ import { type FlowModel, type FlowView, VIEW_KEY } from "./flow.ts";
 export interface SplitPrefs {
 	/** Whether the panel is shown (default true). */
 	enabled: boolean;
-	/** Share of the width the transcript gets (default 0.7). */
+	/** Share of the width the transcript gets (default: the most it can have, the divider at the right). */
 	ratio: number;
 	/** What the panel shows: the track of steps (default) or the tree the run grew. */
 	view: FlowView;
 }
 
-export const DEFAULT_PREFS: SplitPrefs = { enabled: true, ratio: 0.7, view: "track" };
+const MAX_RATIO = 0.85;
+export const DEFAULT_PREFS: SplitPrefs = { enabled: true, ratio: MAX_RATIO, view: "track" };
 const PREFS_FILE = "2pi.json";
 /** Narrower terminals keep one column: the panel would squeeze the transcript too much. */
 export const MIN_SPLIT_WIDTH = 90;
@@ -46,9 +48,9 @@ const MIN_RIGHT = 28;
 
 export function clampRatio(ratio: number, width: number): number {
 	const low = Math.max(0.35, MIN_LEFT / Math.max(1, width));
-	const high = Math.min(0.85, 1 - MIN_RIGHT / Math.max(1, width));
-	if (!Number.isFinite(ratio)) return DEFAULT_PREFS.ratio;
-	return low > high ? DEFAULT_PREFS.ratio : Math.min(high, Math.max(low, ratio));
+	const high = Math.min(MAX_RATIO, 1 - MIN_RIGHT / Math.max(1, width));
+	if (low > high) return DEFAULT_PREFS.ratio;
+	return Math.min(high, Math.max(low, Number.isFinite(ratio) ? ratio : DEFAULT_PREFS.ratio));
 }
 
 /** Preferences live in 2pi's own file in the agent directory, never in pi's settings.json. */
@@ -228,6 +230,27 @@ export class DetailView implements Component {
 const LAYOUT_NODE = Symbol.for("@earendil-works/pi-tui/layout-node");
 
 /**
+ * How pi lays a component out, read through the shared symbol rather than `instanceof`: the packed
+ * 2pi bundles its own copy of pi-tui, so pi's VStack and ScrollView are not instances of 2pi's.
+ */
+function layoutNode(component: Component): { type: string; entries?: StackEntry[] } | undefined {
+	const method = (component as unknown as Record<symbol, unknown>)[LAYOUT_NODE];
+	return typeof method === "function" ? method.call(component) : undefined;
+}
+
+/**
+ * pi hands a mouse event to the layout boxes under the pointer, innermost first, and passes over
+ * stacks and scroll views that keep pi-tui's default handler. The packed 2pi's containers come
+ * from its own copy of pi-tui, whose default handler pi does not recognise, so pi called it: that
+ * handler stacks the columns top to bottom, and a press anywhere below the transcript's last line
+ * went to the divider. The containers 2pi adds take no events; the layout reaches their children.
+ */
+function layoutOnly<T extends Component>(component: T): T {
+	component.handleMouse = () => undefined;
+	return component;
+}
+
+/**
  * Transcript | divider | panel. An HStack with grow weights would not give the exact share
  * (pi-tui hands out the remainder greedily), so the column widths are computed for every frame
  * from the terminal width; the row always spans the full terminal.
@@ -268,16 +291,14 @@ export class SplitRow extends Container {
 /** Fields of pi-tui objects 2pi reads but the type declarations keep private or protected. */
 interface Internals {
 	layoutRoot?: Component;
-	entries?: StackEntry[];
 }
 
 /** Find pi's two parts in its fullscreen root: the transcript and the dock below it. */
 function piParts(root: Component): { transcript: StackEntry; dock: StackEntry } | undefined {
-	if (!(root instanceof VStack)) return undefined;
-	const entries = (root as unknown as Internals).entries;
-	if (!entries || entries.length !== 2) return undefined;
-	const [transcript, dock] = entries as [StackEntry, StackEntry];
-	return transcript.component instanceof ScrollView ? { transcript, dock } : undefined;
+	const node = layoutNode(root);
+	if (node?.type !== "vstack" || node.entries?.length !== 2) return undefined;
+	const [transcript, dock] = node.entries as [StackEntry, StackEntry];
+	return layoutNode(transcript.component)?.type === "scroll" ? { transcript, dock } : undefined;
 }
 
 export interface SplitViewOptions {
@@ -317,7 +338,7 @@ export class SplitView {
 		this.onVisibilityChange = options.onVisibilityChange;
 		this.flow.view = this.prefs.view;
 		this.panel = new FlowPanel(this.flow, this.theme, (key) => this.select(key));
-		this.side = new ScrollView(this.panel, { follow: "none", overscroll: "contain", scrollbar: "auto" });
+		this.side = layoutOnly(new ScrollView(this.panel, { follow: "none", overscroll: "contain", scrollbar: "auto" }));
 		this.splitter = new Splitter({
 			rows: () => this.tui.terminal.rows,
 			theme: this.theme,
@@ -363,12 +384,14 @@ export class SplitView {
 
 	private build(root: Component): Component {
 		const parts = piParts(root);
-		const row = new SplitRow(parts ? parts.transcript.component : root, this.splitter, this.side, () => this.columns());
+		const row = layoutOnly(new SplitRow(parts ? parts.transcript.component : root, this.splitter, this.side, () => this.columns()));
 		if (!parts) return row;
-		return new VStack([
-			{ component: row, basis: 0, grow: 1, shrink: 1, minSize: 1 },
-			{ ...parts.dock },
-		]);
+		return layoutOnly(
+			new VStack([
+				{ component: row, basis: 0, grow: 1, shrink: 1, minSize: 1 },
+				{ ...parts.dock },
+			]),
+		);
 	}
 
 	/** Column widths for this frame, or undefined when the panel does not fit. */
